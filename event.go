@@ -5,11 +5,11 @@ import "errors"
 // FreeSwitch EventSocket Protocol
 // all the events async sent by FS and responses event are formated in the Event fromat
 // Event:
-// Headers \r\n\r\n
-// Body \r\n
+// Headers \n\n
+// Body \n
 //
 // Header format
-// HeaderName: HeaderValue\r\n
+// HeaderName: HeaderValue\n
 //
 // The Event which carry the body always have the header
 // Content-Length: BodyLength in bytewise
