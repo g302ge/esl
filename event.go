@@ -3,7 +3,16 @@ package esl
 import "errors"
 
 // FreeSwitch EventSocket Protocol
+// all the events async sent by FS and responses event are formated in the Event fromat
+// Event:
+// Headers \r\n\r\n
+// Body \r\n
 //
+// Header format
+// HeaderName: HeaderValue\r\n
+//
+// The Event which carry the body always have the header
+// Content-Length: BodyLength in bytewise
 
 // FS events constant variables
 const (
@@ -144,6 +153,11 @@ func (event *Event) GetHeader(name string) (header *Header, err error) {
 // Json serialize the event to json
 func (event *Event) Json() (json string, err error) {
 	err = ErrJsonBodyParsing
+	return
+}
+
+// Plain serialize the event to plaintext
+func (event *Event) Plain() (plain string, err error) {
 	return
 }
 

@@ -47,6 +47,7 @@ type Channel interface {
 	// these pair functions are used in the UNIX socket transfering
 	// you could keep the application long link without disconnected from parent to child proceess
 	// it's useful the time you have to update your application whenever need
+	// FIXME: if these functions should be stateless?
 	IntoRaw() net.Conn
 	FromRaw(conn net.Conn)
 }
@@ -58,8 +59,48 @@ type Channel interface {
 type ServerChannel struct {
 }
 
+// Connect send the connect command to FS
+// Sync method
+func (channel *ServerChannel) Connect() (err error){
+	return
+}
+
+// Linger send the linger command to FS
+// Sync method
+func (channel *ServerChannel) Linger() (err error){
+	return
+}
+
+// Nolinger send the noliner command to FS
+// Sync method
+func (channel *ServerChannel) Nolinger() (err error){
+	return
+}
+
+
+
 // ClientChannel is the simple wrapper of the
 // Inbound pattern
 type ClientChannel struct {
+}
+
+// Auth send the auth command with password to FS 
+// Sync method
+func (channel *ClientChannel) Auth(password string) (err error){
+	return
+}
+
+// Userauth send the userauth command with username and password to FS
+// Sync method
+func (channel *ClientChannel) Userauth(username, password string) (err error){
+
+	return
+}
+
+// Events send the events command to FS
+// Sync method
+func (channel *ClientChannel) Events(category string, evetns []string) (err error){
+
+	return
 }
 

@@ -45,7 +45,7 @@ func (l *defaultLogger) Warnf(format string, args ...interface{}) {
 	l.Printf(format, args...)
 }
 
-// used in current namespace
+// helper functions used in current namespace to log some useful informations
 
 func debug(args ...interface{}) {
 	Logger.Debug(args...)
