@@ -131,6 +131,7 @@ type Header struct {
 }
 
 // Event of FS
+// TODO: event Owner and Key maybe useless in Go implementations
 type Event struct {
 	Name     string   // Event Name e.g. CHANNEL_CREATE
 	Owner    string   // Event owner
@@ -144,22 +145,29 @@ type Event struct {
 
 // GetHeader from current event
 // event keep that the header name is unique in the total event
-func (event *Event) GetHeader(name string) (header *Header, err error) {
+func (event *Event) GetHeader(name string) (value []string, err error) {
 	//TODO: foreach to get current header
 	err = ErrHeaderNotFound
 	return
 }
 
-// Json serialize the event to json
-func (event *Event) Json() (json string, err error) {
+// AddHeader is the helper function to mainpulate the inner headers
+func (event *Event) AddHeader(name, value string) {
+
+}
+
+// IntoJson serialize the event to json
+func (event *Event) IntoJson() (json string, err error) {
 	err = ErrJsonBodyParsing
 	return
 }
 
-// Plain serialize the event to plaintext
-func (event *Event) Plain() (plain string, err error) {
+// IntoPlain serialize the event to plaintext
+func (event *Event) IntoPlain() (plain string, err error) {
 	return
 }
+
+// TODO: from paries json and plain
 
 // Merge other event to current event
 func (event *Event) Merge(rhs *Event) (err error) {
