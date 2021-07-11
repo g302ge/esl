@@ -13,6 +13,14 @@ import "errors"
 //
 // The Event which carry the body always have the header
 // Content-Length: BodyLength in bytewise
+//
+// Execute format
+// sendmsg\n
+// call-command: execute\n
+// execute-app-name: app_name\n
+// execute-app-arg: app_args_string\n
+// async: true\n if ExecuteAsync
+// event-lock: true\n Execute
 
 // FS events constant variables
 const (

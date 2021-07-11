@@ -29,10 +29,13 @@ func (c *connection) send(command string) (err error) {
 // TODO: implement the splite package from TCP stream
 
 // Channel implementors ServerChannel ClientChannel
+// see details https://freeswitch.org/confluence/display/FREESWITCH/mod_commands
 type Channel interface {
-	// FIXME: every execute shoulde be asyn if there some reasons about waiting ?
-	// Execute the application in dialplan and waiting retun respon as Event format
+	// Execute the command async
 	Execute(application, args, uuid string) (response *Event, err error)
+
+	// Execute the command aync 
+	ExecuteAsync(application, args, uuid string) (err error)
 
 	// Api sync execute api
 	Api(command, args string)
@@ -97,9 +100,14 @@ func (channel *ClientChannel) Userauth(username, password string) (err error) {
 	return
 }
 
-// Events send the events command to FS
+// Events send the event command to FS
 // Sync method
 func (channel *ClientChannel) Events(category string, evetns []string) (err error) {
 
+	return
+}
+
+// Noevents send noevents command to FS
+func (channel *ClientChannel) Noevents() (err error){
 	return
 }
