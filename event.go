@@ -1,5 +1,10 @@
 package esl
 
+import "errors"
+
+// FreeSwitch EventSocket Protocol
+//
+
 // FS events constant variables
 const (
 	EslEventCustom                 = "CUSTOM"
@@ -95,3 +100,55 @@ const (
 	EslEventShutdownRequested      = "SHUTDOWN_REQUESTED"
 	EslEventAll                    = "ALL"
 )
+
+// Content-Type of Event
+const (
+	EslEventContentPlain         = "text/event-plain"
+	EslEventContentJson          = "text/event-json"
+	EslEventContentApiResponse   = "api/response"
+	EslEventContentCommandReplay = "command/reply"
+)
+
+// Event Error defines
+var (
+	ErrHeaderNotFound  = errors.New("header not found")
+	ErrJsonBodyParsing = errors.New("parsing JSON from body failed")
+)
+
+// Header of the Event in FS
+type Header struct {
+	Name  string
+	Value []string // FIXME: in C lib is the idx to specific the Header more than one
+}
+
+// Event of FS
+type Event struct {
+	Name     string   // Event Name e.g. CHANNEL_CREATE
+	Owner    string   // Event owner
+	Subclass string   // Event subclass name
+	Headers  []Header // Event Headers
+	Body     []byte   // Event Body
+	BindData []byte   // BindData from the subclass provider
+	UserData []byte   // UserData of user, but now don't know how to use this field
+	Key      int64    // Key like UUID
+}
+
+// GetHeader from current event
+// event keep that the header name is unique in the total event
+func (event *Event) GetHeader(name string) (header *Header, err error) {
+	//TODO: foreach to get current header
+	err = ErrHeaderNotFound
+	return
+}
+
+// Json serialize the event to json
+func (event *Event) Json() (json string, err error) {
+	err = ErrJsonBodyParsing
+	return
+}
+
+// Merge other event to current event
+func (event *Event) Merge(rhs *Event) (err error) {
+
+	return
+}
