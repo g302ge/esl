@@ -1,7 +1,7 @@
 package esl
 
 import (
-	"net"
+	"sync"
 )
 
 // Channel should be thread safe
@@ -14,9 +14,28 @@ import (
 // auth ClueCon
 // userauth username ClueCon
 
+// Execute an application sync method
+// e.g.
+//
+// api status
+//
+// Content-Type: api/response
+// Content-Length: 367
+//
+// UP 0 years, 0 days, 16 hours, 51 minutes, 5 seconds, 534 milliseconds, 583 microseconds
+// FreeSWITCH (Version 1.10.7-dev git 81fff85 2021-06-14 16:46:28Z 64bit) is ready
+// 16 session(s) since startup
+// 0 session(s) - peak 2, last 5min 0
+// 0 session(s) per Sec out of max 30, peak 1, last 5min 0
+// 1000 session(s) max
+// min idle cpu 0.00/99.63
+// Current Stack Size/Max 240K/8192K
+
+
 // Channel implementors ServerChannel ClientChannel
 // see details https://freeswitch.org/confluence/display/FREESWITCH/mod_commands
-type Channel interface {
+type Channels interface {
+
 	// Execute the command async
 	Execute(application, args, uuid string) (response *Event, err error)
 
@@ -34,21 +53,46 @@ type Channel interface {
 
 	// Close the inner scoket and release some resources
 	Close()
-
-	// these pair functions are used in the UNIX socket transfering
-	// you could keep the application long link without disconnected from parent to child proceess
-	// it's useful the time you have to update your application whenever need
-	// FIXME: if these functions should be stateless or stateful?
-	IntoRaw() net.Conn
-	FromRaw(conn net.Conn)
 }
 
-// both ServerChannel and ClientChannel implement the Channel interface
+
+// FS strange event model 
+// Generaly speaking the Events on Network should be Sequential consistency
+//
+// SendApi -> ReceiveApiResponse 
+// SendApi -> ReceiveEvent -> ReceiveApiResponse
+//
+// because that the if the same time FS received the SendApi and prepare to execute, also receive INVITE of SIP generated a CHANNEL_EVENT
+// so any sync all should be blocked before the SendApi finish
+//
+// but there is impossible in this ordering 
+// ReceiveApiResponse2 -> ReceiveApiResponse1 
+//
+// In Outbound accepted channel there is nothing to worry about becuase that all the channel is loop in their own goroutine 
+// But in Inbound pattern everything could be complex
+// if we use the Global lock to sync to keep the Sequential consistency
+// the application which using this library could be inefficiencily 
+// so how to handle this situation ?
+// FIXME: should use two inbound connection one to receive the event and one execute command ?
+
+/// TODO: async method use the UUID to handle the fuck model ?
+
+// Channel the sync mode control the event socket 
+type Channel struct{
+	connection
+	sync.Mutex
+}
+
+
+
 
 // OutboundChannel when accept a new connection from FS will derive a new channel
 // Outbound pattern
+// in this pattern anything could be sync because this object will be maintained by the business goroutine
+// there is not thread-safe problem
 type OutboundChannel struct {
 	connection
+	sync.Mutex
 }
 
 // Connect send the connect command to FS
@@ -72,7 +116,7 @@ func (channel *OutboundChannel) Nolinger() (err error) {
 // ClientChannel is the simple wrapper of the
 // Inbound pattern
 type InboundChannel struct {
-	connection
+	Channel
 }
 
 // Auth send the auth command with password to FS

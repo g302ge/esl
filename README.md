@@ -23,6 +23,15 @@ So I developed this library help developer to control the behaviors of FreeSwitc
 // TODO...
 ```
 
-## Best practice in Call Center 
+## Best practice in ESL
 
-TODO...
+Well, the event socket protocol is very strange in morden network protocol design. In network application every event is async, so in normal every request in application should carry a unique sequence and the server resposne need the same unique sequence to implment the ACK pattern. But in FS ESL lib writen in C there is only a Fuck global lock.
+
+In call center business, there are 
+
+1. customer call -> IVR
+2. customer call -> IVR -> ACD -> agent call
+3. agent call -> ACD -> customer call
+4. agent call -> agent call
+
+In this library the `OutboundChannel` is that accepted from the Server socket, and implemented using the lock to implement the pattern 1. 
