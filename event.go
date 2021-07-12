@@ -118,12 +118,33 @@ const (
 	EslEventAll                    = "ALL"
 )
 
+// esl normal headers
+const (
+	EslContentType   = "Content-Type"
+	EslContentLength = "Content-Length"
+	EslEventName     = "Event-Name"
+	EslReplyText     = "Reply-Text"
+
+	// TODO: other logic
+)
+
 // Content-Type of Event
 const (
-	EslEventContentPlain         = "text/event-plain"
-	EslEventContentJson          = "text/event-json"
-	EslEventContentApiResponse   = "api/response"
-	EslEventContentCommandReplay = "command/reply"
+	EslEventContentPlain            = "text/event-plain"
+	EslEventContentJson             = "text/event-json"
+	EslEventContentApiResponse      = "api/response"
+	EslEventContentCommandReplay    = "command/reply"
+	EslEventContentDiscoonectNotice = "text/disconnect-notice"
+)
+
+// Event Type
+const (
+	EslEvent        = iota // text/event-plain and text/event-json
+	EslReplyOk             // command/reply +OK
+	EslResponseOk          // api/response +OK
+	EslReplyErr            // command/reply -Err
+	EslResponseErr         // api/response -Err
+	EslDisconnected        // text/disconnect-notice
 )
 
 // Event Error defines
@@ -132,23 +153,13 @@ var (
 	ErrJsonBodyParsing = errors.New("parsing JSON from body failed")
 )
 
-// Header of the Event in FS
-type Header struct {
-	Name  string
-	Value []string // FIXME: in C lib is the idx to specific the Header more than one
-}
-
 // Event of FS
-// TODO: event Owner and Key maybe useless in Go implementations
 type Event struct {
-	Name     string   // Event Name e.g. CHANNEL_CREATE
-	Owner    string   // Event owner
-	Subclass string   // Event subclass name
-	Headers  []Header // Event Headers
-	Body     []byte   // Event Body
-	BindData []byte   // BindData from the subclass provider
-	UserData []byte   // UserData of user, but now don't know how to use this field
-	Key      int64    // Key like UUID
+	Name     string              // Event Name e.g. CHANNEL_CREATE
+	Subclass string              // Event subclass name
+	Type     int                 // Event content typetext/event-plain
+	Headers  map[string][]string // Event Headers
+	Body     string              // Event Body always string type
 }
 
 // GetHeader from current event
@@ -174,8 +185,6 @@ func (event *Event) IntoJson() (json string, err error) {
 func (event *Event) IntoPlain() (plain string, err error) {
 	return
 }
-
-// TODO: from paries json and plain
 
 // Merge other event to current event
 func (event *Event) Merge(rhs *Event) (err error) {

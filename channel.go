@@ -14,34 +14,20 @@ import (
 // auth ClueCon
 // userauth username ClueCon
 
-// simple wrapper of the net.Conn
-type connection struct {
-	net.Conn
-}
-
-// send plain text command over net.Conn
-func (c *connection) send(command string) (err error) {
-	// ioutil.
-	// should implement the write implementation
-	return
-}
-
-// TODO: implement the splite package from TCP stream
-
 // Channel implementors ServerChannel ClientChannel
 // see details https://freeswitch.org/confluence/display/FREESWITCH/mod_commands
 type Channel interface {
 	// Execute the command async
 	Execute(application, args, uuid string) (response *Event, err error)
 
-	// Execute the command aync 
-	ExecuteAsync(application, args, uuid string) (err error)
+	// Execute the command aync will return the Job-UUID event
+	ExecuteAsync(application, args, uuid string) (response *Event, err error)
 
 	// Api sync execute api
-	Api(command, args string)
+	Api(command, args string) (response *Event, err error)
 
 	// Bgapi async execute api
-	Bgapi(command, args, uuid string) // should return the Job-UUID
+	Bgapi(command, args, uuid string) (response *Event, err error) // should return the Job-UUID
 
 	// Filter apply a filter on this socket to receive the specific event
 	Filter(header, value string) (err error)
@@ -59,55 +45,57 @@ type Channel interface {
 
 // both ServerChannel and ClientChannel implement the Channel interface
 
-// ServerChannel when accept a new connection from FS will derive a new channel
+// OutboundChannel when accept a new connection from FS will derive a new channel
 // Outbound pattern
-type ServerChannel struct {
+type OutboundChannel struct {
+	connection
 }
 
 // Connect send the connect command to FS
 // Sync method
-func (channel *ServerChannel) Connect() (err error) {
+func (channel *OutboundChannel) Connect() (err error) {
 	return
 }
 
 // Linger send the linger command to FS
 // Sync method
-func (channel *ServerChannel) Linger() (err error) {
+func (channel *OutboundChannel) Linger() (err error) {
 	return
 }
 
 // Nolinger send the noliner command to FS
 // Sync method
-func (channel *ServerChannel) Nolinger() (err error) {
+func (channel *OutboundChannel) Nolinger() (err error) {
 	return
 }
 
 // ClientChannel is the simple wrapper of the
 // Inbound pattern
-type ClientChannel struct {
+type InboundChannel struct {
+	connection
 }
 
 // Auth send the auth command with password to FS
 // Sync method
-func (channel *ClientChannel) Auth(password string) (err error) {
+func (channel *InboundChannel) Auth(password string) (err error) {
 	return
 }
 
 // Userauth send the userauth command with username and password to FS
 // Sync method
-func (channel *ClientChannel) Userauth(username, password string) (err error) {
+func (channel *InboundChannel) Userauth(username, password string) (err error) {
 
 	return
 }
 
 // Events send the event command to FS
 // Sync method
-func (channel *ClientChannel) Events(category string, evetns []string) (err error) {
+func (channel *InboundChannel) Events(category string, evetns []string) (err error) {
 
 	return
 }
 
 // Noevents send noevents command to FS
-func (channel *ClientChannel) Noevents() (err error){
+func (channel *InboundChannel) Noevents() (err error) {
 	return
 }
