@@ -3,6 +3,7 @@ package esl
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -52,10 +53,41 @@ func (channel *OutboundChannel) syncCommand(command string) (err error) {
 		errorf("%s execute on outbound connection failed %v", command, err)
 		return
 	}
-	defer channel.Unlock()
+	channel.Unlock() // FIXME： send ordering is the same reply ordering this is the SC
 	reply := <-channel.reply
 	if reply.Type == EslReplyErr {
 		err = errors.New(reply.Body)
+		return
+	}
+	return
+}
+
+// Execute an application on this channel
+func (channel *OutboundChannel) Execute(application, arg, uuid string) (response *Event, err error) {
+	var builder strings.Builder
+	builder.WriteString("sendmsg")
+	if uuid != "" {
+		builder.WriteString(fmt.Sprintf(" %s\n", uuid))
+	} else {
+		builder.WriteString("\n")
+	}
+	builder.WriteString("call-command: execute\n")
+	builder.WriteString(fmt.Sprintf("execute-app-name: %s\n", application))
+	if arg != "" {
+		builder.WriteString(fmt.Sprintf("execute-app-arg: %s\n", arg))
+	}
+	builder.WriteString("event-lock: true\n")
+
+	channel.Lock()
+	err = channel.send(builder.String())
+	if err != nil {
+		errorf("sendmsg failed %v", err)
+		return
+	}
+	channel.Unlock()
+	event := <-channel.reply
+	if event.Type == EslReplyErr {
+		err = errors.New(event.Body)
 		return
 	}
 	return
@@ -71,7 +103,12 @@ func (channel *OutboundChannel) Connect() (err error) {
 
 // Answer the inbound call from outbound channel
 func (channel *OutboundChannel) Answer() (err error) {
-	return channel.syncCommand("answer") // TODO: should replace the fuck logic
+	respnse, err := channel.Execute("answer", "", "")
+	if err != nil {
+		return err
+	}
+	debug(respnse.Body)
+	return
 }
 
 // Linger send the linger command to FS
