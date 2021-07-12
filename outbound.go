@@ -61,21 +61,27 @@ func (channel *OutboundChannel) syncCommand(command string) (err error) {
 	return
 }
 
+// func (channel *OutboundChannel) Execute(application, arg string) ()
+
 // Connect send the connect command to FS
 // Sync method
 func (channel *OutboundChannel) Connect() (err error) {
-	return channel.syncCommand("connect")
+	return channel.send("command\r\n\r\n")
 }
 
 // Answer the inbound call from outbound channel
 func (channel *OutboundChannel) Answer() (err error) {
-	return channel.syncCommand("answer")
+	return channel.syncCommand("answer") // TODO: should replace the fuck logic
 }
 
 // Linger send the linger command to FS
 // Sync method
-func (channel *OutboundChannel) Linger() (err error) {
-	return channel.syncCommand("linger")
+// if seconds is 0 will use the default expired time
+func (channel *OutboundChannel) Linger(seconds int) (err error) {
+	if seconds == 0 {
+		return channel.syncCommand("linger")
+	}
+	return channel.syncCommand(fmt.Sprintf("linger %d", seconds))
 }
 
 // Nolinger send the noliner command to FS
