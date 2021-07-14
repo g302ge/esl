@@ -6,6 +6,8 @@ package esl
 // there is not thread-safe problem
 type OutboundChannel struct {
 	*Channel
+
+	// here need to cancel the registerstion of the 
 }
 
 // // TODO: Execute method execute on the outbound channel
