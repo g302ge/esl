@@ -43,6 +43,7 @@ func (server *Server) Listen(ctx context.Context) (err error) {
 				// create and call the user callback
 				c := context.WithValue(server.ctx, nil, nil)
 				channel := newChannel(c, conn)
+				go channel.Run()
 				go server.Callback(c, &OutboundChannel{Channel: channel})
 			}
 		}

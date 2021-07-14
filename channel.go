@@ -68,12 +68,13 @@ func (c *cx) Value(key interface{}) interface{} {
 type Channel struct {
 	connection
 	sync.Mutex
+	sync.Once
 	ctx      cx
 	reply    chan *Event
 	response chan *Event
 	Events   chan *Event
-	Signal <-chan struct{}
-	ch chan struct{}
+	Signal   <-chan struct{}
+	ch       chan struct{}
 }
 
 // channel builder used in inner package
@@ -85,6 +86,7 @@ func newChannel(ctx context.Context, conn net.Conn) *Channel {
 			textproto.NewReader(bufio.NewReader(conn)),
 		},
 		sync.Mutex{},
+		sync.Once{},
 		cx{ctx, nil},
 		make(chan *Event),
 		make(chan *Event),
@@ -98,33 +100,35 @@ func newChannel(ctx context.Context, conn net.Conn) *Channel {
 // Run the Channel
 // in your application should create a new goroutine to loop run this function
 func (channel *Channel) Run() {
-	for {
-		if channel.ctx.Err() != nil {
-			if channel.ctx.Context.Err() == nil {
-				// check the inner logic
-				close(channel.ch)
+	channel.Once.Do(func() {
+		for {
+			if channel.ctx.Err() != nil {
+				if channel.ctx.Context.Err() == nil {
+					// check the inner logic
+					close(channel.ch)
+				}
+				break
 			}
-			break
+			event, err := channel.recv()
+			if err != nil {
+				errorm(err)
+				channel.ctx.err = err
+				continue
+			}
+			if event.Type == EslEvent {
+				channel.Events <- event
+			}
+			if event.Type == EslReply {
+				channel.reply <- event
+			}
+			if event.Type == EslResponse {
+				channel.response <- event
+			} else {
+				break
+			}
 		}
-		event, err := channel.recv()
-		if err != nil {
-			errorm(err)
-			channel.ctx.err = err
-			continue
-		}
-		if event.Type == EslEvent {
-			channel.Events <- event
-		}
-		if event.Type == EslReply {
-			channel.reply <- event
-		}
-		if event.Type == EslResponse {
-			channel.response <- event
-		} else {
-			break
-		}
-	}
-	channel.connection.Close()
+		channel.connection.Close()
+	})
 }
 
 // Alive return the Channel  state
@@ -163,24 +167,24 @@ func (channel *Channel) sendmsg() (response *Event, err error) {
 }
 
 // execute connect command
-func (channel *Channel) connect() (err error){
+func (channel *Channel) connect() (err error) {
 
 	return
 }
 
-// execute answer command 
-func (channel *Channel) answer() (err error){
+// execute answer command
+func (channel *Channel) answer() (err error) {
 	return
 }
 
-// execute linger command 
-func (channel *Channel) linger() (err error){
+// execute linger command
+func (channel *Channel) linger() (err error) {
 
 	return
 }
 
-// execute nolinger command 
-func (channel *Channel) nolinger() (err error){
+// execute nolinger command
+func (channel *Channel) nolinger() (err error) {
 
 	return
 }
@@ -209,13 +213,10 @@ func (channel *Channel) exit() {
 // noevents
 // resume
 
-
-
 // Close the channel normally
 func (channel *Channel) Close() {
 
 }
-
 
 // FS strange event model
 // Generaly speaking the Events on Network should be Sequential consistency
