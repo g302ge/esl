@@ -2,7 +2,6 @@ package esl
 
 import (
 	"context"
-	"fmt"
 	"net"
 )
 
@@ -12,7 +11,6 @@ type Callback = func(ctx context.Context, channel *OutboundChannel)
 // Server wrapper to use the Outbound pattern of FS
 type Server struct {
 	net.Listener
-	port     int
 	channel  chan struct{}
 	ctx      context.Context
 	Error    error
@@ -20,15 +18,21 @@ type Server struct {
 	Signal   <-chan struct{}
 }
 
+// NewServer create a new server 
+func NewServer() (server *Server) {
+	server = &Server{}
+	server.channel = make(chan struct{})
+	server.Signal = server.channel
+	return
+}
+
 // Listen on specific port
-func (server *Server) Listen(ctx context.Context) (err error) {
+func (server *Server) Listen(ctx context.Context, address string) (err error) {
 	server.ctx = ctx
-	server.Listener, err = net.Listen("TCP", fmt.Sprintf("0.0.0.0:%d", server.port))
+	server.Listener, err = net.Listen("TCP", address)
 	if err != nil {
 		return
 	}
-	server.channel = make(chan struct{})
-	server.Signal = server.channel
 	go func() {
 		for {
 			if server.ctx.Err() != nil {
