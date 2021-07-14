@@ -139,12 +139,10 @@ const (
 
 // Event Type
 const (
-	EslEvent        = iota // text/event-plain and text/event-json
-	EslReplyOk             // command/reply +OK
-	EslResponseOk          // api/response +OK
-	EslReplyErr            // command/reply -Err
-	EslResponseErr         // api/response -Err
-	EslDisconnected        // text/disconnect-notice
+	EslEvent = iota // text/event-plain and text/event-json
+	EslReply // command/reply +OK -ERR
+	EslResponse // api/response +OK -ERR
+	EslDisconnectedNotice // text/disconnect-notice
 )
 
 // Event Error defines

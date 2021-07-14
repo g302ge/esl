@@ -1,5 +1,15 @@
 package esl
 
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"net"
+	"net/textproto"
+	"sync"
+	"time"
+)
+
 // Channel should be thread safe
 // and every client could use this Channel abstraction in multi-tenant system building
 // if the connection need the queue ?
@@ -27,27 +37,185 @@ package esl
 // min idle cpu 0.00/99.63
 // Current Stack Size/Max 240K/8192K
 
-// Channel implementors ServerChannel ClientChannel
-// see details https://freeswitch.org/confluence/display/FREESWITCH/mod_commands
-type Channel interface {
-	// Execute the command async only in Outbound pattern
-	Execute(application, args, uuid string) (response *Event, err error)
-
-	// Execute the command aync will return the Job-UUID event
-	ExecuteAsync(application, args, uuid string) (response *Event, err error)
-
-	// Api sync execute api return api/response
-	Api(command, args string) (response *Event, err error)
-
-	// Bgapi async execute api return command/reply with Job-UUID
-	Bgapi(command, args, uuid string) (response *Event, err error) // should return the Job-UUID
-
-	// Filter apply a filter on this socket to receive the specific event
-	Filter(header, value string) (err error)
-
-	// Close the inner scoket and release some resources
-	Close()
+// inner context implment the Context
+type cx struct {
+	context.Context
+	err error
 }
+
+func (c *cx) Deadline() (deadline time.Time, ok bool) {
+	return c.Context.Deadline()
+}
+
+func (c *cx) Done() <-chan struct{} {
+	return c.Context.Done()
+}
+
+func (c *cx) Err() error {
+	if c.err == nil {
+		return c.Context.Err()
+	}
+	return c.err
+}
+
+func (c *cx) Value(key interface{}) interface{} {
+	return c.Context.Value(key)
+}
+
+// Channel wrapper of the connection with specific methods
+// parent -> child -> current
+// cancel the current is correct ?
+type Channel struct {
+	connection
+	sync.Mutex
+	ctx      cx
+	reply    chan *Event
+	response chan *Event
+	Events   chan *Event
+	Signal <-chan struct{}
+	ch chan struct{}
+}
+
+// channel builder used in inner package
+func newChannel(ctx context.Context, conn net.Conn) *Channel {
+	ch := make(chan struct{})
+	c := &Channel{
+		connection{
+			conn,
+			textproto.NewReader(bufio.NewReader(conn)),
+		},
+		sync.Mutex{},
+		cx{ctx, nil},
+		make(chan *Event),
+		make(chan *Event),
+		make(chan *Event),
+		ch,
+		ch,
+	}
+	return c
+}
+
+// Run the Channel
+// in your application should create a new goroutine to loop run this function
+func (channel *Channel) Run() {
+	for {
+		if channel.ctx.Err() != nil {
+			if channel.ctx.Context.Err() == nil {
+				// check the inner logic
+				close(channel.ch)
+			}
+			break
+		}
+		event, err := channel.recv()
+		if err != nil {
+			errorm(err)
+			channel.ctx.err = err
+			continue
+		}
+		if event.Type == EslEvent {
+			channel.Events <- event
+		}
+		if event.Type == EslReply {
+			channel.reply <- event
+		}
+		if event.Type == EslResponse {
+			channel.response <- event
+		} else {
+			break
+		}
+	}
+	channel.connection.Close()
+}
+
+// Alive return the Channel  state
+func (channel *Channel) Alive() bool {
+	return channel.ctx.Err() == nil
+}
+
+// execute command sync
+func (channel *Channel) command(cmd string) (err error) {
+	cmd = fmt.Sprintf("%s\r\n\r\n", cmd)
+	channel.Lock()
+	err = channel.send(cmd)
+	if err != nil {
+		errorf("channel execute command failed %v", err)
+		channel.ctx.err = err
+		return
+	}
+	channel.Unlock()
+	return
+}
+
+// execute unload a module
+func (channel *Channel) unload(module string) (err error) {
+	return
+}
+
+// execute reload a module
+func (channel *Channel) reload(module string) (err error) {
+
+	return
+}
+
+// execute command sendmsg
+func (channel *Channel) sendmsg() (response *Event, err error) {
+	return
+}
+
+// execute connect command
+func (channel *Channel) connect() (err error){
+
+	return
+}
+
+// execute answer command 
+func (channel *Channel) answer() (err error){
+	return
+}
+
+// execute linger command 
+func (channel *Channel) linger() (err error){
+
+	return
+}
+
+// execute nolinger command 
+func (channel *Channel) nolinger() (err error){
+
+	return
+}
+
+// execute the exit command
+func (channel *Channel) exit() {
+
+}
+
+// sendmsg
+// sendevent
+// filter
+// connect
+// answer
+// getvar
+// myevents
+// divert_events
+// api
+// bgapi
+// log
+// linger
+// nolinger
+// nolog
+// event
+// nixevent
+// noevents
+// resume
+
+
+
+// Close the channel normally
+func (channel *Channel) Close() {
+
+}
+
 
 // FS strange event model
 // Generaly speaking the Events on Network should be Sequential consistency

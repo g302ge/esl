@@ -20,7 +20,7 @@ var (
 // simple wrapper of the net.Conn
 type connection struct {
 	net.Conn
-	textproto.Reader
+	*textproto.Reader
 }
 
 // send plain text command over net.Conn
@@ -121,25 +121,19 @@ func (c *connection) recv() (event *Event, err error) {
 		case EslEventContentCommandReplay:
 			{
 				// command reply
-				event.Type = EslReplyOk
+				event.Type = EslReply
 				event.Body = headers.Get(EslReplyText)
-				if strings.Contains(event.Body, "-ERR") {
-					event.Type = EslReplyErr
-				}
 			}
 		case EslEventContentApiResponse:
 			{
 				// api response
-				event.Type = EslResponseOk
+				event.Type = EslResponse
 				event.Body = string(body)
-				if strings.Contains(event.Body, "-ERR") {
-					event.Type = EslResponseErr
-				}
 			}
 		case EslEventContentDiscoonectNotice:
 			{
 				// disconnect-notice
-				event.Type = EslDisconnected
+				event.Type = EslDisconnectedNotice
 				debug("receive the disconnected notice")
 			}
 		}
