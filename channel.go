@@ -148,8 +148,8 @@ func (channel *Channel) command(cmd string) (err error) {
 		channel.ctx.err = err
 		return
 	}
+	reply := <-channel.reply // reply could change the SC FUCK!
 	channel.Unlock()
-	reply := <-channel.reply
 	if strings.Contains(reply.Body, "-ERR") {
 		debugf("channel send command failed %v", err)
 		return errors.New(reply.Body)
