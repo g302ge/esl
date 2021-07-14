@@ -3,9 +3,11 @@ package esl
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/textproto"
+	"strings"
 	"sync"
 	"time"
 )
@@ -147,33 +149,71 @@ func (channel *Channel) command(cmd string) (err error) {
 		return
 	}
 	channel.Unlock()
+	reply := <-channel.reply
+	if strings.Contains(reply.Body, "-ERR") {
+		debugf("channel send command failed %v", err)
+		return errors.New(reply.Body)
+	}
 	return
 }
 
-// execute unload a module
-func (channel *Channel) unload(module string) (err error) {
+// execute the sendmsg logic with application
+func (channel *Channel) execute() (response *Event, err error){
 	return
 }
 
-// execute reload a module
-func (channel *Channel) reload(module string) (err error) {
+// TODO: here need a batch pattern to execute for one connection
+// TODO: here also need abtach pattern for execute method
 
-	return
+// execute unload a module mod_event_socket
+func (channel *Channel) unload() (err error) {
+	return channel.command("api bgapi unload mod_event_socket")
 }
 
-// execute command sendmsg
-func (channel *Channel) sendmsg() (response *Event, err error) {
-	return
+// execute reload a module mod_event_socket
+func (channel *Channel) reload() (err error) {
+	return channel.command("api bgapi reload mod_event_socket")
 }
+
+// execute the filter command
+func (channel *Channel) filter(action string, events ...string) (err error) {
+	// filter delete commands...
+	// filter add commands...
+	es := strings.Join(events, " ")
+	return channel.command(fmt.Sprintf("filter %s %s", action, es))
+}
+
+// execute the resume command
+func (channel *Channel) resume() (err error) {
+	// in FS could set this session as LFLAG_RESUME
+	// maybe useful for Inbound mode
+	return channel.command("resume")
+}
+
+// TODO: except these methods other methods should check the auth logic
+
+// execute auth command
+func (channel *Channel) auth(password string) (err error) {
+	return channel.command(fmt.Sprintf("auth %s", password))
+}
+
+// execute userauth command
+func (channel *Channel) userauth(username, password string) (err error) {
+	return channel.command(fmt.Sprintf("userauth %s %s", username, password))
+}
+
+// bellow methods should be authorizated or outbound method
 
 // execute connect command
-func (channel *Channel) connect() (err error) {
-
-	return
+func (channel *Channel) connect() (event *Event, err error) {
+	// connect with connect event 
+	// should check the result should return result event response 
+	return //channel.command("connect")
 }
 
 // execute answer command
 func (channel *Channel) answer() (err error) {
+	// this should use ececute command 
 	return
 }
 
@@ -185,6 +225,41 @@ func (channel *Channel) linger() (err error) {
 
 // execute nolinger command
 func (channel *Channel) nolinger() (err error) {
+
+	return
+}
+
+// execute the getvar command to get the variable of current channel
+func (channel *Channel) getvar(key string) (err error) {
+
+	return
+}
+
+// execute sendevent command
+func (channel *Channel) sendevent() (err error) {
+
+	return
+}
+
+// execute command sendmsg
+func (channel *Channel) sendmsg() (response *Event, err error) {
+	return
+}
+
+// execute api command sync
+func (channel *Channel) api() (err error) {
+
+	return
+}
+
+// execute bgapi command async
+func (channel *Channel) bgapi() (err error) {
+
+	return
+}
+
+// execute event command to subcribe the events specificed
+func (channel *Channel) event(format string, events ...string) (err error) {
 
 	return
 }
@@ -216,56 +291,4 @@ func (channel *Channel) exit() {
 // Close the channel normally
 func (channel *Channel) Close() {
 
-}
-
-// FS strange event model
-// Generaly speaking the Events on Network should be Sequential consistency
-//
-// SendApi -> ReceiveApiResponse
-// SendApi -> ReceiveEvent -> ReceiveApiResponse
-//
-// because that the if the same time FS received the SendApi and prepare to execute, also receive INVITE of SIP generated a CHANNEL_EVENT
-// so any sync all should be blocked before the SendApi finish
-//
-// but there is impossible in this ordering
-// ReceiveApiResponse2 -> ReceiveApiResponse1
-//
-// In Outbound accepted channel there is nothing to worry about becuase that all the channel is loop in their own goroutine
-// But in Inbound pattern everything could be complex
-// if we use the Global lock to sync to keep the Sequential consistency
-// the application which using this library could be inefficiencily
-// so how to handle this situation ?
-// FIXME: should use two inbound connection one to receive the event and one execute command ?
-
-/// TODO: async method use the UUID to handle the fuck model ?
-
-// ClientChannel is the simple wrapper of the
-// Inbound pattern
-type InboundChannel struct {
-	Channel
-}
-
-// Auth send the auth command with password to FS
-// Sync method
-func (channel *InboundChannel) Auth(password string) (err error) {
-	return
-}
-
-// Userauth send the userauth command with username and password to FS
-// Sync method
-func (channel *InboundChannel) Userauth(username, password string) (err error) {
-
-	return
-}
-
-// Events send the event command to FS
-// Sync method
-func (channel *InboundChannel) Events(category string, evetns []string) (err error) {
-
-	return
-}
-
-// Noevents send noevents command to FS
-func (channel *InboundChannel) Noevents() (err error) {
-	return
 }
