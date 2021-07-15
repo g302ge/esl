@@ -6,9 +6,9 @@ import (
 )
 
 func TestSampleServer(t *testing.T) {
-	server := NewServer()
+	server := NewServer(context.TODO(),"0.0.0.0:8080")
 
-	server.Callback = func(ctx context.Context, channel *OutboundChannel) {
+	server.Callback = func(channel *OutboundChannel) {
 		// create a state machine
 		// waiting the cancel signal ?
 		// loop to receive
@@ -17,7 +17,7 @@ func TestSampleServer(t *testing.T) {
 		}
 	}
 
-	err := server.Listen(context.TODO(), "0.0.0.0:8080")
+	err := server.Listen()
 	if err != nil {
 		t.Errorf("Listen failed %v", err)
 		return

@@ -5,9 +5,9 @@ package esl
 // in this pattern anything could be sync because this object will be maintained by the business goroutine
 // there is not thread-safe problem
 type OutboundChannel struct {
-	*Channel
+	*channel
 
-	// here need to cancel the registerstion of the 
+	// here need to cancel the registerstion of the
 }
 
 // // TODO: Execute method execute on the outbound channel

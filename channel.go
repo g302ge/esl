@@ -1,15 +1,11 @@
 package esl
 
 import (
-	"bufio"
-	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/textproto"
 	"strings"
 	"sync"
-	"time"
+	"sync/atomic"
 )
 
 // Channel should be thread safe
@@ -39,120 +35,81 @@ import (
 // min idle cpu 0.00/99.63
 // Current Stack Size/Max 240K/8192K
 
-// inner context implment the Context
-type cx struct {
-	context.Context
-	err error
+// when the channel closed will callback this function
+type closeFunc = func()
+
+// inner channel
+type channel struct {
+	connection               // inner connection body
+	sync.Mutex               // sync mutex when execute the command
+	reply      chan *Event   // reply channel
+	response   chan *Event   // response channel
+	Events     chan *Event   // events channel
+	signal     chan struct{} // signal useful for outbound pattern
+	close      closeFunc     // inner connection close callback
+	err        error
+	running    atomic.Value
 }
 
-func (c *cx) Deadline() (deadline time.Time, ok bool) {
-	return c.Context.Deadline()
-}
-
-func (c *cx) Done() <-chan struct{} {
-	return c.Context.Done()
-}
-
-func (c *cx) Err() error {
-	if c.err == nil {
-		return c.Context.Err()
-	}
-	return c.err
-}
-
-func (c *cx) Value(key interface{}) interface{} {
-	return c.Context.Value(key)
-}
-
-// Channel wrapper of the connection with specific methods
-// parent -> child -> current
-// cancel the current is correct ?
-type Channel struct {
-	connection
-	sync.Mutex
-	sync.Once
-	ctx      cx
-	reply    chan *Event
-	response chan *Event
-	Events   chan *Event
-	Signal   <-chan struct{}
-	ch       chan struct{}
-}
-
-// channel builder used in inner package
-func newChannel(ctx context.Context, conn net.Conn) *Channel {
-	ch := make(chan struct{})
-	c := &Channel{
-		connection{
-			conn,
-			textproto.NewReader(bufio.NewReader(conn)),
-		},
-		sync.Mutex{},
-		sync.Once{},
-		cx{ctx, nil},
-		make(chan *Event),
-		make(chan *Event),
-		make(chan *Event),
-		ch,
-		ch,
-	}
-	return c
-}
-
-// Run the Channel
-// in your application should create a new goroutine to loop run this function
-func (channel *Channel) Run(stop <-chan struct{}) error {
-	channel.Once.Do(func() {
-		for {
-			if channel.ctx.Err() != nil {
-				if channel.ctx.Context.Err() == nil {
-					// check the inner logic
-					close(channel.ch)
-				}
-				errorf("erros: %v", channel.ctx.Err().Error())
-				break
-			}
-			event, err := channel.recv()
-			if err != nil {
-				errorm(err)
-				channel.ctx.err = err
-				continue
-			}
+// loop for recv
+func (c *channel) loop() {
+	c.running.Store(true)
+	for {
+		running, _ := c.running.Load().(bool)
+		if !running {
+			break
+		}
+		if c.err != nil {
+			debug("channel meet a fuck IO error")
+			break
+		}
+		if event, err := c.recv(); err != nil {
+			debugf("recv error %v", err)
+			break
+		} else {
 			if event.Type == EslEvent {
-				channel.Events <- event
+				c.Events <- event
 			}
 			if event.Type == EslReply {
-				channel.reply <- event
+				c.reply <- event
 			}
 			if event.Type == EslResponse {
-				channel.response <- event
+				c.response <- event
 			} else {
+				m, _ := event.IntoPlain()
+				errorf("unsupport content type %v, and the result is %s", event.Type, m)
 				break
 			}
 		}
-	})
 
-	go func() {
-		<-stop
-		channel.connection.Close()
-	}()
-
-	return nil
+	}
+	c.shutdown()
+	c.clear()
 }
 
-// Alive return the Channel  state
-func (channel *Channel) Alive() bool {
-	return channel.ctx.Err() == nil
+func (c *channel) clear() {
+	if c.signal != nil {
+		close(c.signal)
+	}
+	if c.close != nil {
+		c.close()
+	}
+}
+
+// shutdown the channel
+func (c *channel) shutdown() {
+	c.connection.Close()
+	c.clear()
 }
 
 // execute command sync
-func (channel *Channel) command(cmd string) (err error) {
+func (channel *channel) command(cmd string) (err error) {
 	cmd = fmt.Sprintf("%s\r\n\r\n", cmd)
 	channel.Lock()
 	err = channel.send(cmd)
 	if err != nil {
 		errorf("channel execute command failed %v", err)
-		channel.ctx.err = err
+		channel.err = err
 		return
 	}
 	reply := <-channel.reply // reply could change the SC FUCK!
@@ -164,26 +121,18 @@ func (channel *Channel) command(cmd string) (err error) {
 	return
 }
 
-// execute the sendmsg logic with application
-func (channel *Channel) execute() (response *Event, err error){
-	return
-}
-
-// TODO: here need a batch pattern to execute for one connection
-// TODO: here also need abtach pattern for execute method
-
 // execute unload a module mod_event_socket
-func (channel *Channel) unload() (err error) {
+func (channel *channel) unload() (err error) {
 	return channel.command("api bgapi unload mod_event_socket")
 }
 
 // execute reload a module mod_event_socket
-func (channel *Channel) reload() (err error) {
+func (channel *channel) reload() (err error) {
 	return channel.command("api bgapi reload mod_event_socket")
 }
 
 // execute the filter command
-func (channel *Channel) filter(action string, events ...string) (err error) {
+func (channel *channel) filter(action string, events ...string) (err error) {
 	// filter delete commands...
 	// filter add commands...
 	es := strings.Join(events, " ")
@@ -191,7 +140,7 @@ func (channel *Channel) filter(action string, events ...string) (err error) {
 }
 
 // execute the resume command
-func (channel *Channel) resume() (err error) {
+func (channel *channel) resume() (err error) {
 	// in FS could set this session as LFLAG_RESUME
 	// maybe useful for Inbound mode
 	return channel.command("resume")
@@ -200,102 +149,86 @@ func (channel *Channel) resume() (err error) {
 // TODO: except these methods other methods should check the auth logic
 
 // execute auth command
-func (channel *Channel) auth(password string) (err error) {
+func (channel *channel) auth(password string) (err error) {
 	return channel.command(fmt.Sprintf("auth %s", password))
 }
 
 // execute userauth command
-func (channel *Channel) userauth(username, password string) (err error) {
+func (channel *channel) userauth(username, password string) (err error) {
 	return channel.command(fmt.Sprintf("userauth %s %s", username, password))
 }
+
+// execute the sendmsg logic with application
+func (channel *channel) execute() (response *Event, err error) {
+	return
+}
+
+// TODO: here need a batch pattern to execute for one connection
+// TODO: here also need abtach pattern for execute method
 
 // bellow methods should be authorizated or outbound method
 
 // execute connect command
-func (channel *Channel) connect() (event *Event, err error) {
-	// connect with connect event 
-	// should check the result should return result event response 
+func (channel *channel) connect() (event *Event, err error) {
+	// connect with connect event
+	// should check the result should return result event response
 	return //channel.command("connect")
 }
 
 // execute answer command
-func (channel *Channel) answer() (err error) {
-	// this should use ececute command 
+func (channel *channel) answer() (err error) {
+	// this should use ececute command
 	return
 }
 
 // execute linger command
-func (channel *Channel) linger() (err error) {
+func (channel *channel) linger() (err error) {
 
 	return
 }
 
 // execute nolinger command
-func (channel *Channel) nolinger() (err error) {
+func (channel *channel) nolinger() (err error) {
 
 	return
 }
 
 // execute the getvar command to get the variable of current channel
-func (channel *Channel) getvar(key string) (err error) {
+func (channel *channel) getvar(key string) (err error) {
 
 	return
 }
 
 // execute sendevent command
-func (channel *Channel) sendevent() (err error) {
+func (channel *channel) sendevent() (err error) {
 
 	return
 }
 
 // execute command sendmsg
-func (channel *Channel) sendmsg() (response *Event, err error) {
+func (channel *channel) sendmsg() (response *Event, err error) {
 	return
 }
 
 // execute api command sync
-func (channel *Channel) api() (err error) {
+func (channel *channel) api() (err error) {
 
 	return
 }
 
 // execute bgapi command async
-func (channel *Channel) bgapi() (err error) {
+func (channel *channel) bgapi() (err error) {
 
 	return
 }
 
 // execute event command to subcribe the events specificed
-func (channel *Channel) event(format string, events ...string) (err error) {
+func (channel *channel) event(format string, events ...string) (err error) {
 
 	return
 }
 
 // execute the exit command
-func (channel *Channel) exit() {
-
-}
-
-// sendmsg
-// sendevent
-// filter
-// connect
-// answer
-// getvar
-// myevents
-// divert_events
-// api
-// bgapi
-// log
-// linger
-// nolinger
-// nolog
-// event
-// nixevent
-// noevents
-// resume
-
-// Close the channel normally
-func (channel *Channel) Close() {
+func (channel *channel) exit() {
 
 }

@@ -1,85 +1,105 @@
 package esl
 
 import (
+	"bufio"
 	"context"
 	"net"
+	"net/textproto"
+	"sync"
+	"sync/atomic"
 )
 
 // Callback user defined handler logic
-type Callback = func(ctx context.Context, channel *OutboundChannel)
+type Callback = func(channel *OutboundChannel)
 
 // TODO: need a connection manager to manage the long connection
 
 // Server wrapper to use the Outbound pattern of FS
 type Server struct {
 	net.Listener
-	channel  chan struct{}
+	address  string
+	Signal   <-chan struct{}
+	ch       chan struct{}
 	ctx      context.Context
 	Error    error
 	Callback Callback
-	Signal   <-chan struct{}
-	cancels  []context.CancelFunc
+	channels sync.Map //
+	running  atomic.Value
 }
 
 // NewServer create a new server
-func NewServer() (server *Server) {
+func NewServer(ctx context.Context, address string) (server *Server) {
 	server = &Server{}
-	server.channel = make(chan struct{})
-	server.Signal = server.channel
+	server.ch = make(chan struct{})
+	server.Signal = server.ch
+	server.address = address
+	server.ctx = ctx
 	return
 }
 
+// Shutdown the Outbound server
+func (server *Server) Shutdown() {
+	running, _ := server.running.Load().(bool)
+	if !running {
+		return
+	}
+	server.running.Store(false)
+	server.Close()
+	server.channels.Range(func(key, value interface{}) bool {
+		server.channels.Delete(key)
+		ch := value.(*channel)
+		ch.shutdown()
+		<-ch.signal
+		return true
+	})
+	close(server.ch)
+}
+
 // Listen on specific port
-func (server *Server) Listen(ctx context.Context, address string) (err error) {
-	server.ctx = ctx
-	server.Listener, err = net.Listen("TCP", address)
+func (server *Server) Listen() (err error) {
+	server.Listener, err = net.Listen("TCP", server.address)
 	if err != nil {
 		return
 	}
-
+	server.running.Store(true)
 	for {
-		done := make(chan error, 1)
-		stop := make(chan struct{})
-
+		running, _ := server.running.Load().(bool)
+		if !running {
+			break
+		}
 		if server.ctx.Err() != nil {
-			close(server.channel)
 			break
 		}
 		if conn, e := server.Accept(); e != nil {
 			server.Error = e
-			close(server.channel) // channel cancel ctx
-			for _, c := range server.cancels {
-				c() // all canceled
-			}
+			close(server.ch) // channel cancel ctx
+			server.Shutdown()
 			break
 		} else {
-			// create and call the user callback
-			c, cancel := context.WithCancel(ctx)
-			server.cancels = append(server.cancels, cancel)
-			channel := newChannel(c, conn)
-			go func() {
-				done <- channel.Run(stop)
-			}()
-			go server.Callback(c, &OutboundChannel{Channel: channel})
-
-			// start a goroutine with konwing when it will stop
-			var stopped bool
-			for i := 0; i < cap(done); i++ {
-				if err := <-done; err != nil {
-					errorf("error: %v", err)
-					server.Error = err
-					close(server.channel) // channel cancel ctx
-					for _, c := range server.cancels {
-						c() // all canceled
-					}
-					break
-				}
-				if !stopped {
-					stopped = true
-					close(stop)
-				}
+			c, _ := conn.(*net.TCPConn)
+			c.SetNoDelay(true)
+			f, _ := c.File()
+			fd := f.Fd()
+			ch := &channel{
+				connection: connection{
+					conn,
+					textproto.NewReader(bufio.NewReader(conn)),
+				},
+				reply:    make(chan *Event),
+				response: make(chan *Event),
+				Events:   make(chan *Event),
+				close: func() {
+					server.channels.Delete(fd) // unregister the channel
+				},
+				signal: make(chan struct{}),
 			}
+			server.channels.Store(fd, ch)
+			go ch.loop()
+			go server.Callback(&OutboundChannel{ch})
 		}
 	}
+
+	// Clear function
+	server.Shutdown()
 	return
 }
