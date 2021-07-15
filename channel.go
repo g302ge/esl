@@ -175,12 +175,6 @@ func (channel *channel) connect() (event *Event, err error) {
 	return //channel.command("connect")
 }
 
-// execute answer command
-func (channel *channel) answer() (err error) {
-	// this should use ececute command
-	return
-}
-
 // execute linger command
 func (channel *channel) linger() (err error) {
 
