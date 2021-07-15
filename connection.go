@@ -30,12 +30,12 @@ func (c *connection) send(command string) (err error) {
 	n := 0
 	s := len(wait)
 	for n < s {
+		wait = wait[n:] // next slice to send
 		n, err = c.Conn.Write(wait)
 		if err != nil {
 			warnf("I/O error when write to socket %v", err)
 			return
 		}
-		wait = wait[n+1:] // next slice to send
 	}
 	return
 }

@@ -141,7 +141,8 @@ func (channel *channel) execute(application, arg, uuid string) (response *Event,
 	if arg != "" {
 		builder.WriteString(fmt.Sprintf("execute-app-arg: %s\n", arg))
 	}
-	builder.WriteString("event-lock: true") // the sendmsg call will fill the final \n
+	//FIXME: arg need be urlencoded
+	builder.WriteString("event-lock: true\n") // the sendmsg call will fill the final \n
 	response, err = channel.sendmsg(builder.String(), uuid)
 	return
 }
