@@ -101,7 +101,7 @@ func newChannel(ctx context.Context, conn net.Conn) *Channel {
 
 // Run the Channel
 // in your application should create a new goroutine to loop run this function
-func (channel *Channel) Run() {
+func (channel *Channel) Run(stop <-chan struct{}) error {
 	channel.Once.Do(func() {
 		for {
 			if channel.ctx.Err() != nil {
@@ -109,6 +109,7 @@ func (channel *Channel) Run() {
 					// check the inner logic
 					close(channel.ch)
 				}
+				errorf("erros: %v", channel.ctx.Err().Error())
 				break
 			}
 			event, err := channel.recv()
@@ -129,8 +130,14 @@ func (channel *Channel) Run() {
 				break
 			}
 		}
-		channel.connection.Close()
 	})
+
+	go func() {
+		<-stop
+		channel.connection.Close()
+	}()
+
+	return nil
 }
 
 // Alive return the Channel  state
