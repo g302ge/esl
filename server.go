@@ -94,6 +94,7 @@ func (server *Server) Listen() (err error) {
 					Events:   make(chan *Event),
 					close: func() {
 						server.channels.Delete(fd) // unregister the channel
+						f.Close()
 					},
 					signal: make(chan struct{}),
 				}

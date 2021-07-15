@@ -8,32 +8,7 @@ import (
 	"sync/atomic"
 )
 
-// Channel should be thread safe
-// and every client could use this Channel abstraction in multi-tenant system building
-// if the connection need the queue ?
-
-// sendmsg
-// sendevent
-// connect
-// auth ClueCon
-// userauth username ClueCon
-
-// Execute an application sync method
-// e.g.
-//
-// api status
-//
-// Content-Type: api/response
-// Content-Length: 367
-//
-// UP 0 years, 0 days, 16 hours, 51 minutes, 5 seconds, 534 milliseconds, 583 microseconds
-// FreeSWITCH (Version 1.10.7-dev git 81fff85 2021-06-14 16:46:28Z 64bit) is ready
-// 16 session(s) since startup
-// 0 session(s) - peak 2, last 5min 0
-// 0 session(s) per Sec out of max 30, peak 1, last 5min 0
-// 1000 session(s) max
-// min idle cpu 0.00/99.63
-// Current Stack Size/Max 240K/8192K
+// channel and the protocol wrappers
 
 // when the channel closed will callback this function
 type closeFunc = func()
@@ -102,33 +77,83 @@ func (c *channel) shutdown() {
 	c.clear()
 }
 
-// execute command sync
-func (channel *channel) command(cmd string) (err error) {
-	cmd = fmt.Sprintf("%s\r\n\r\n", cmd)
+// execute command sync without reply
+func (channel *channel) noreplycmd(cmd string) (err error) {
+	_, err = channel.replycmd(cmd)
+	return
+}
+
+// execute command sync with reply
+func (channel *channel) replycmd(cmd string) (reply *Event, err error) {
+	cmd = fmt.Sprintf("%s\n\n", cmd)
 	channel.Lock()
 	err = channel.send(cmd)
 	if err != nil {
+		//FIXME: in FS this situation will cause the socket close FUCK!
 		errorf("channel execute command failed %v", err)
 		channel.err = err
 		return
 	}
-	reply := <-channel.reply // reply could change the SC FUCK!
+	reply = <-channel.reply
 	channel.Unlock()
 	if strings.Contains(reply.Body, "-ERR") {
+		//FIXME: in FS this situation will cause the socket close FUCK!
 		debugf("channel send command failed %v", err)
-		return errors.New(reply.Body)
+		return nil, errors.New(reply.Body)
 	}
+	return
+}
+
+// execute command sendmsg
+func (channel *channel) sendmsg(body, uuid string) (response *Event, err error) {
+	builder := strings.Builder{}
+	builder.WriteString("sendmsg")
+	if uuid != "" {
+		builder.WriteString(fmt.Sprintf("%s\n"))
+	} else {
+		builder.WriteString("\n")
+	}
+	builder.WriteString(fmt.Sprintf("%s\n", body)) //FIXME: maybe the \n is useless
+
+	channel.Lock()
+	err = channel.send(builder.String())
+	if err != nil {
+		//FIXME: in FS this situation will cause the socket close FUCK!
+		errorf("channel execute command failed %v", err)
+		channel.err = err
+		return
+	}
+	response = <-channel.reply // TODO: check if really use the reply channel ?
+	channel.Unlock()
+	if strings.Contains(response.Body, "-ERR") {
+		//FIXME: in FS this situation will cause the socket close FUCK!
+		debugf("channel send command failed %v", err)
+		return nil, errors.New(response.Body)
+	}
+	return
+}
+
+// execute the sendmsg logic with application
+func (channel *channel) execute(application, arg, uuid string) (response *Event, err error) {
+	builder := strings.Builder{}
+	builder.WriteString("call-command: execute\n")
+	builder.WriteString(fmt.Sprintf("execute-app-name: %s\n", application))
+	if arg != "" {
+		builder.WriteString(fmt.Sprintf("execute-app-arg: %s\n", arg))
+	}
+	builder.WriteString("event-lock: true") // the sendmsg call will fill the final \n
+	response, err = channel.sendmsg(builder.String(), uuid)
 	return
 }
 
 // execute unload a module mod_event_socket
 func (channel *channel) unload() (err error) {
-	return channel.command("api bgapi unload mod_event_socket")
+	return channel.noreplycmd("api bgapi unload mod_event_socket")
 }
 
 // execute reload a module mod_event_socket
 func (channel *channel) reload() (err error) {
-	return channel.command("api bgapi reload mod_event_socket")
+	return channel.noreplycmd("api bgapi reload mod_event_socket")
 }
 
 // execute the filter command
@@ -136,71 +161,58 @@ func (channel *channel) filter(action string, events ...string) (err error) {
 	// filter delete commands...
 	// filter add commands...
 	es := strings.Join(events, " ")
-	return channel.command(fmt.Sprintf("filter %s %s", action, es))
+	return channel.noreplycmd(fmt.Sprintf("filter %s %s", action, es))
 }
 
 // execute the resume command
 func (channel *channel) resume() (err error) {
 	// in FS could set this session as LFLAG_RESUME
 	// maybe useful for Inbound mode
-	return channel.command("resume")
+	return channel.noreplycmd("resume")
 }
 
 // TODO: except these methods other methods should check the auth logic
 
 // execute auth command
 func (channel *channel) auth(password string) (err error) {
-	return channel.command(fmt.Sprintf("auth %s", password))
+	return channel.noreplycmd(fmt.Sprintf("auth %s", password))
 }
 
 // execute userauth command
 func (channel *channel) userauth(username, password string) (err error) {
-	return channel.command(fmt.Sprintf("userauth %s %s", username, password))
+	return channel.noreplycmd(fmt.Sprintf("userauth %s %s", username, password))
 }
-
-// execute the sendmsg logic with application
-func (channel *channel) execute() (response *Event, err error) {
-	return
-}
-
-// TODO: here need a batch pattern to execute for one connection
-// TODO: here also need abtach pattern for execute method
 
 // bellow methods should be authorizated or outbound method
 
 // execute connect command
-func (channel *channel) connect() (event *Event, err error) {
-	// connect with connect event
-	// should check the result should return result event response
-	return //channel.command("connect")
+func (channel *channel) connect() (response *Event, err error) {
+	return channel.replycmd("connect")
 }
 
 // execute linger command
-func (channel *channel) linger() (err error) {
-
-	return
+func (channel *channel) linger(second int) (err error) {
+	return channel.noreplycmd(fmt.Sprintf("linger %d", second))
 }
 
 // execute nolinger command
 func (channel *channel) nolinger() (err error) {
-
-	return
+	return channel.noreplycmd("nolinger")
 }
 
 // execute the getvar command to get the variable of current channel
-func (channel *channel) getvar(key string) (err error) {
-
+func (channel *channel) getvar(key string) (result string, err error) {
+	r, err := channel.replycmd(fmt.Sprintf("getvar %s", key))
+	if err != nil {
+		return
+	}
+	result = r.Body // this command result will be emplaced in the Body
 	return
 }
 
 // execute sendevent command
-func (channel *channel) sendevent() (err error) {
+func (channel *channel) sendevent(event *Event) (err error) {
 
-	return
-}
-
-// execute command sendmsg
-func (channel *channel) sendmsg() (response *Event, err error) {
 	return
 }
 
@@ -211,6 +223,7 @@ func (channel *channel) api() (err error) {
 }
 
 // execute bgapi command async
+// FIXME: return response ? or Job-UUID ?
 func (channel *channel) bgapi() (err error) {
 
 	return
@@ -218,11 +231,43 @@ func (channel *channel) bgapi() (err error) {
 
 // execute event command to subcribe the events specificed
 func (channel *channel) event(format string, events ...string) (err error) {
+	es := strings.Join(events, " ")
+	return channel.noreplycmd(fmt.Sprintf("event %s %s", format, es))
+}
 
-	return
+// execute nixevent cancel events subcribe
+func (channel *channel) nixevent(events ...string) (err error) {
+	es := strings.Join(events, " ")
+	return channel.noreplycmd(fmt.Sprintf("nixevent %s", es))
+}
+
+// execute noevents command
+func (channel *channel) noevents() (err error) {
+	return channel.noreplycmd("noevents")
+}
+
+// execute divert_events command
+func (channel *channel) divertEvents(open bool) (err error) {
+	if open {
+		return channel.noreplycmd("divert_events on")
+	}
+	return channel.noreplycmd("divert_events off")
+}
+
+// execute myevents command
+func (channel *channel) myevents(uuid, format string) (err error) {
+	if format != "" {
+		channel.noreplycmd(fmt.Sprintf("myevents %s %s", uuid, format))
+	}
+	return channel.noreplycmd("myevents")
 }
 
 // execute the exit command
 func (channel *channel) exit() {
-
+	channel.noreplycmd("exit")
+	// TODO: should change the channel state?
+	// which could make sync closed ?
+	// but in some concurrent situation this thing could make memory leak 
+	// see more about the SC 
+	channel.running.Store(false)
 }

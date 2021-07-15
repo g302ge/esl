@@ -23,3 +23,9 @@ TODO:
 ## How to build your FS control logic 
 
 TODO:
+
+## Clearfy FS Manual and Concepts
+
+Here is a simple clearfy FS manual and introduce some confused concepts in FS not only Channel lifecycle and more.
+
+TODO:

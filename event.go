@@ -139,10 +139,10 @@ const (
 
 // Event Type
 const (
-	EslEvent = iota // text/event-plain and text/event-json
-	EslReply // command/reply +OK -ERR
-	EslResponse // api/response +OK -ERR
-	EslDisconnectedNotice // text/disconnect-notice
+	EslEvent              = iota // text/event-plain and text/event-json
+	EslReply                     // command/reply +OK -ERR
+	EslResponse                  // api/response +OK -ERR
+	EslDisconnectedNotice        // text/disconnect-notice
 )
 
 // Event Error defines
@@ -158,6 +158,11 @@ type Event struct {
 	Type     int                 // Event content typetext/event-plain
 	Headers  map[string][]string // Event Headers
 	Body     string              // Event Body always string type
+}
+
+// Error implement the error interface
+func (event *Event) Error() string {
+	return event.Body
 }
 
 // GetHeader from current event

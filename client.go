@@ -13,3 +13,8 @@ type Client struct {
 func (client *Client) Dial() (err error) {
 	return
 }
+
+// Close the client
+func (client *Client) Close() {
+
+}
