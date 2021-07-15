@@ -109,7 +109,7 @@ func (channel *channel) sendmsg(body, uuid string) (response *Event, err error) 
 	builder := strings.Builder{}
 	builder.WriteString("sendmsg")
 	if uuid != "" {
-		builder.WriteString(fmt.Sprintf("%s\n"))
+		builder.WriteString(fmt.Sprintf("%s\n", uuid))
 	} else {
 		builder.WriteString("\n")
 	}
@@ -267,7 +267,7 @@ func (channel *channel) exit() {
 	channel.noreplycmd("exit")
 	// TODO: should change the channel state?
 	// which could make sync closed ?
-	// but in some concurrent situation this thing could make memory leak 
-	// see more about the SC 
+	// but in some concurrent situation this thing could make memory leak
+	// see more about the SC
 	channel.running.Store(false)
 }
