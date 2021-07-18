@@ -166,6 +166,8 @@ func (channel *channel) filter(action string, events ...string) (err error) {
 }
 
 // execute the resume command
+// TODO: should know when should recover the session in the listener strtuct 
+// should review the FS source code to figure out this fuck thing
 func (channel *channel) resume() (err error) {
 	// in FS could set this session as LFLAG_RESUME
 	// maybe useful for Inbound mode
