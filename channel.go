@@ -59,9 +59,9 @@ func (c *channel) loop() {
 
 	}
 	c.shutdown()
-	c.clear()
 }
 
+// clear fucntion only used in the shutdown
 func (c *channel) clear() {
 	if c.signal != nil {
 		close(c.signal)
