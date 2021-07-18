@@ -135,6 +135,7 @@ const (
 	EslEventContentApiResponse      = "api/response"
 	EslEventContentCommandReplay    = "command/reply"
 	EslEventContentDiscoonectNotice = "text/disconnect-notice"
+	EslEventAuthRequest = "auth/request"
 )
 
 // Event Type

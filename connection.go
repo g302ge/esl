@@ -64,6 +64,7 @@ func (c *connection) recv() (event *Event, err error) {
 	}
 
 	// switch the content type to handle the body
+	redo:
 	if contentType := headers.Get(EslContentType); contentType != "" {
 		switch contentType {
 		case EslEventContentJson:
@@ -136,6 +137,7 @@ func (c *connection) recv() (event *Event, err error) {
 				event.Type = EslDisconnectedNotice
 				debug("receive the disconnected notice")
 			}
+		case EslEventAuthRequest: goto redo // because the auth request will be none should ignore
 		}
 	}
 
