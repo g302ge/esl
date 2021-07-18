@@ -136,6 +136,9 @@ func (c *connection) recv() (event *Event, err error) {
 				// disconnect-notice
 				event.Type = EslDisconnectedNotice
 				debug("receive the disconnected notice")
+				uuid := headers.Get("Controlled-Session-UUID")
+				// FIXME: maybe there need an error to identify this event
+				debugf("Session UUID socket Disconnected Notice %s", uuid)
 			}
 		case EslEventAuthRequest: goto redo // because the auth request will be none should ignore
 		}

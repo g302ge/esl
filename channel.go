@@ -105,6 +105,8 @@ func (channel *channel) replycmd(cmd string) (reply *Event, err error) {
 }
 
 // execute command sendmsg
+// FIXME:  https://freeswitch.org/confluence/display/FREESWITCH/mod_event_socket#mod_event_socket-3.9sendmsg
+// FIX to the suitable pattern of this command
 func (channel *channel) sendmsg(body, uuid string) (response *Event, err error) {
 	builder := strings.Builder{}
 	builder.WriteString("sendmsg")
@@ -166,7 +168,7 @@ func (channel *channel) filter(action string, events ...string) (err error) {
 }
 
 // execute the resume command
-// TODO: should know when should recover the session in the listener strtuct 
+// TODO: should know when should recover the session in the listener strtuct
 // should review the FS source code to figure out this fuck thing
 func (channel *channel) resume() (err error) {
 	// in FS could set this session as LFLAG_RESUME

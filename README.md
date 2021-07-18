@@ -46,3 +46,10 @@ TODO:
 Here is a simple clearfy FS manual and introduce some confused concepts in FS not only Channel lifecycle and more.
 
 TODO:
+
+## TODO List 
+
+1. When Inbound disconnected and how to recover the inbound connection state?
+2. If sendmsg could recover the session 
+3. Wrap the fsctl commands in this package 
+4. Total callcenter example single node no cluster 
